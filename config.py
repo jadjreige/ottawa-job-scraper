@@ -53,6 +53,28 @@ RELEVANCE_THRESHOLD = 3
 MIN_SALARY = 90000
 MAX_SALARY = 100000
 
+# Seniority filtering - titles containing these terms are excluded outright,
+# regardless of keyword relevance score. Based on ~1.5-2 years of professional
+# experience (DOJ Software Developer since Oct 2024, plus OPC/House of
+# Commons/CIPO). Adjust this list as your experience grows.
+EXCLUDED_SENIORITY_TERMS = [
+    "senior", "sr.", "sr ", "lead developer", "lead engineer", "tech lead",
+    "principal", "staff engineer", "staff developer", "director", "head of",
+    "vp ", "vice president", "chief", "manager", "architect",
+    "10+ years", "8+ years", "7+ years", "6+ years", "5+ years",
+]
+
+# Titles containing these terms are a positive signal that the role is
+# appropriately junior/intermediate - not required, but if present, the
+# posting is never excluded by EXCLUDED_SENIORITY_TERMS even if it overlaps
+# (e.g. "Junior Developer mentored by Senior team" shouldn't be excluded
+# just because "Senior" appears in the description).
+JUNIOR_FRIENDLY_TERMS = [
+    "junior", "jr.", "jr ", "entry level", "entry-level", "associate",
+    "intermediate", "co-op", "coop", "internship", "intern", "new grad",
+    "graduate", "level 1", "level i", "i -", "developer i",
+]
+
 EMAIL_TO = None  # set via GitHub secret EMAIL_TO at runtime, see main.py
 EMAIL_FROM = None  # set via GitHub secret EMAIL_FROM at runtime (must be a SendGrid-verified sender)
 
