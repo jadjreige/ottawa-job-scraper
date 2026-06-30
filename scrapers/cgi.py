@@ -19,7 +19,7 @@ from bs4 import BeautifulSoup
 SOURCE_NAME = "CGI"
 URL = "https://cgi.njoyn.com/corp/xweb/xweb.asp?CLID=21001&page=joblisting&lang=1"
 
-MIN_EXPECTED_ROWS = 5
+MIN_EXPECTED_CA_JOBS = 3
 MAX_ATTEMPTS = 3
 
 
@@ -55,12 +55,14 @@ def scrape():
     best_jobs = []
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            # wait for at least a handful of table rows to actually render,
-            # not just the empty table shell
+            # stealth mode + network idle to defeat njoyn's bot fingerprinting,
+            # which otherwise serves automated traffic a stripped-down listing
             html = get_rendered_html(
                 URL,
                 wait_selector="table tr:nth-of-type(6)",
                 wait_ms=8000,
+                stealth=True,
+                wait_networkidle=True,
             )
         except Exception as e:
             print(f"[{SOURCE_NAME}] attempt {attempt} browser fetch failed: {e}")
@@ -70,14 +72,17 @@ def scrape():
         if len(jobs) > len(best_jobs):
             best_jobs = jobs
 
-        if row_count >= MIN_EXPECTED_ROWS and jobs:
+        # retry if we got suspiciously few CANADIAN jobs - the tell that njoyn
+        # served us a stripped-down result rather than the full listing
+        if len(jobs) >= MIN_EXPECTED_CA_JOBS:
             return jobs
 
-        print(f"[{SOURCE_NAME}] attempt {attempt}: only {row_count} rows / "
-              f"{len(jobs)} CA jobs - likely incomplete, retrying")
-        time.sleep(3)
+        print(f"[{SOURCE_NAME}] attempt {attempt}: {row_count} rows / "
+              f"{len(jobs)} CA jobs - likely throttled, retrying")
+        time.sleep(4)
 
-    if not best_jobs:
-        print(f"[{SOURCE_NAME}] all attempts returned incomplete - njoyn likely "
-              f"throttling this run; will retry next scheduled run")
+    if len(best_jobs) < MIN_EXPECTED_CA_JOBS:
+        print(f"[{SOURCE_NAME}] all attempts returned a stripped-down listing - "
+              f"njoyn is fingerprinting this run. Returning what we got "
+              f"({len(best_jobs)} job(s)); consider njoyn's native job alerts as backup.")
     return best_jobs
