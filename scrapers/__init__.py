@@ -17,6 +17,9 @@ from . import telesat
 from . import versaterm
 from . import coveo
 from . import foci
+from . import jsi
+from . import bank_of_canada
+from . import nav_canada
 
 ACTIVE_SCRAPERS = [
     city_ottawa,
@@ -26,4 +29,7 @@ ACTIVE_SCRAPERS = [
     versaterm,
     coveo,
     foci,
+    jsi,
+    bank_of_canada,
+    nav_canada,
 ]

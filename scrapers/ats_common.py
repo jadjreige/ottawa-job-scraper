@@ -122,5 +122,130 @@ def scrape_bamboohr(company_slug, source_name, location_filter=None):
     return jobs
 
 
+def scrape_workday(tenant, wd_instance, site, source_name, location_filter=None,
+                   search_text="", max_jobs=100):
+    """
+    Workday's public CxS API - the same JSON endpoint Workday career pages
+    call internally:
+    POST https://<tenant>.<wd_instance>.myworkdayjobs.com/wday/cxs/<tenant>/<site>/jobs
+    Body: {"appliedFacets": {}, "limit": N, "offset": N, "searchText": ""}
+    Returns {"total": N, "jobPostings": [{title, externalPath, locationsText, ...}]}
+    """
+    from .utils import post_json
+
+    jobs = []
+    base = f"https://{tenant}.{wd_instance}.myworkdayjobs.com"
+    api_url = f"{base}/wday/cxs/{tenant}/{site}/jobs"
+    job_base = f"{base}/en-US/{site}"
+
+    offset = 0
+    page_size = 20  # Workday CxS max per request
+    while offset < max_jobs:
+        try:
+            data = post_json(api_url, {
+                "appliedFacets": {},
+                "limit": page_size,
+                "offset": offset,
+                "searchText": search_text,
+            })
+        except Exception as e:
+            print(f"[{source_name}] Workday CxS fetch failed at offset {offset}: {e}")
+            break
+
+        postings = data.get("jobPostings", [])
+        if not postings:
+            break
+
+        for posting in postings:
+            title = clean_text(posting.get("title", ""))
+            path = posting.get("externalPath", "")
+            location = clean_text(posting.get("locationsText", ""))
+
+            if not title or not path:
+                continue
+
+            if location_filter and location:
+                loc_lower = location.lower()
+                if not any(f in loc_lower for f in location_filter):
+                    continue
+
+            jobs.append(make_job(title=title, url=job_base + path,
+                                 source=source_name,
+                                 location=location or "See posting"))
+
+        offset += page_size
+        if offset >= data.get("total", 0):
+            break
+
+    return jobs
+
+
+def scrape_ultipro(company_code, board_id, source_name, location_filter=None,
+                   base_host="recruiting.ultipro.ca", top=50):
+    """
+    UltiPro/UKG job board public search endpoint - the same JSON endpoint the
+    job board page calls internally:
+    POST https://<host>/<code>/JobBoard/<board_id>/JobBoardView/LoadSearchResults
+    Returns {"opportunities": [{Title, Id, Locations, ...}], "totalCount": N}
+    """
+    from .utils import post_json
+
+    jobs = []
+    api_url = f"https://{base_host}/{company_code}/JobBoard/{board_id}/JobBoardView/LoadSearchResults"
+    payload = {
+        "opportunitySearch": {
+            "Top": top,
+            "Skip": 0,
+            "QueryString": "",
+            "OrderBy": [{"Value": "postedDateDesc", "PropertyName": "PostedDate",
+                         "Ascending": False}],
+            "Filters": [
+                {"t": "TermsSearchFilterDto", "fieldName": 4, "extra": None, "values": []},
+                {"t": "TermsSearchFilterDto", "fieldName": 5, "extra": None, "values": []},
+                {"t": "TermsSearchFilterDto", "fieldName": 6, "extra": None, "values": []},
+            ],
+        },
+        "matchCriteria": {
+            "PreferredJobs": [], "Educations": [], "LicenseAndCertifications": [],
+            "Skills": [], "hasNoLicenses": False, "SkippedSkills": [],
+        },
+    }
+
+    try:
+        data = post_json(api_url, payload,
+                         extra_headers={"X-Requested-With": "XMLHttpRequest"})
+    except Exception as e:
+        print(f"[{source_name}] UltiPro fetch failed: {e}")
+        return jobs
+
+    for opp in data.get("opportunities", []):
+        title = clean_text(opp.get("Title", ""))
+        opp_id = opp.get("Id", "")
+        if not title or not opp_id:
+            continue
+
+        # Locations is a list of dicts with nested Address info
+        location = ""
+        locs = opp.get("Locations") or []
+        if locs and isinstance(locs, list):
+            addr = (locs[0] or {}).get("Address") or {}
+            city = clean_text((addr.get("City") or ""))
+            state_obj = addr.get("State") or {}
+            state = clean_text(state_obj.get("Code", "") if isinstance(state_obj, dict) else "")
+            location = ", ".join(p for p in [city, state] if p)
+
+        if location_filter and location:
+            loc_lower = location.lower()
+            if not any(f in loc_lower for f in location_filter):
+                continue
+
+        href = (f"https://{base_host}/{company_code}/JobBoard/{board_id}/"
+                f"OpportunityDetail?opportunityId={opp_id}")
+        jobs.append(make_job(title=title, url=href, source=source_name,
+                             location=location or "See posting"))
+
+    return jobs
+
+
 # Common Canadian/Ottawa location filters reused across sources
 OTTAWA_LOCATION_FILTER = ["ottawa", "gatineau", "kanata", "remote", "canada", "ontario"]

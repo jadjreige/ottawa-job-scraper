@@ -27,6 +27,18 @@ def get_json(url, params=None):
     return resp.json()
 
 
+def post_json(url, payload, extra_headers=None):
+    """POST a JSON payload and return the JSON response. Used for ATS platforms
+    (Workday, UltiPro) whose career pages fetch listings via POST endpoints."""
+    headers = dict(HEADERS)
+    headers["Content-Type"] = "application/json; charset=UTF-8"
+    if extra_headers:
+        headers.update(extra_headers)
+    resp = requests.post(url, headers=headers, json=payload, timeout=TIMEOUT)
+    resp.raise_for_status()
+    return resp.json()
+
+
 def clean_text(text):
     if not text:
         return ""
