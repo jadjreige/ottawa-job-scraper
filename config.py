@@ -47,11 +47,25 @@ KEYWORDS = {
 # Roughly tuned to act as a "60%+ fit" bar rather than requiring an exact title match.
 RELEVANCE_THRESHOLD = 3
 
-# Salary filter - if a posting includes a parsed salary, only keep ones
-# overlapping this range. Postings with no salary info are kept by default
-# (most career pages don't list salary in the listing view).
-MIN_SALARY = 90000
-MAX_SALARY = 100000
+# Source health baselines. If a scraper returns FEWER raw postings than its
+# baseline, it's flagged as suspect in the digest - this catches the failure
+# mode where a site changes its markup and the scraper silently returns 0
+# instead of raising. Tune these from observed healthy runs; set to 0 for
+# sources that legitimately go empty.
+#
+# Baselines below are taken from the 2026-07-23 run.
+SOURCE_HEALTH_BASELINE = {
+    "City of Ottawa": 3,
+    "Hydro Ottawa": 5,
+    "CGI": 20,
+    "Telesat": 30,
+    "Versaterm": 10,
+    "Coveo": 25,
+    "Foci Solutions": 1,
+    "JSI (Jatom Systems)": 1,
+    "Bank of Canada": 10,
+    "NAV CANADA": 5,
+}
 
 # Seniority filtering - titles containing these terms are excluded outright,
 # regardless of keyword relevance score. Based on ~1.5-2 years of professional

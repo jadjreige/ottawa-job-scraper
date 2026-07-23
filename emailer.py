@@ -15,9 +15,37 @@ from collections import defaultdict
 SENDGRID_URL = "https://api.sendgrid.com/v3/mail/send"
 
 
-def build_html(jobs_by_tier, new_count):
+def build_health_html(health):
+    """Renders the scraper-health banner. Empty string when all sources are OK."""
+    if not health:
+        return ""
+
+    rows = []
+    for source, status, detail in health:
+        colour = "#c0392b" if status in ("down", "crashed") else "#b8860b"
+        rows.append(
+            f"<li><strong style='color:{colour}'>{source} - {status.upper()}</strong>"
+            f" <span style='color:#666'>({detail})</span></li>"
+        )
+
+    return (
+        "<div style='border:2px solid #c0392b;background:#fff5f5;"
+        "padding:10px 14px;margin:12px 0;border-radius:4px'>"
+        "<strong style='color:#c0392b'>Scraper health warning</strong>"
+        "<p style='margin:6px 0;color:#555;font-size:13px'>These sources returned "
+        "fewer postings than expected. A quiet job market and a broken scraper look "
+        "identical in this digest - check these before assuming there is nothing new.</p>"
+        "<ul style='margin:6px 0'>" + "".join(rows) + "</ul></div>"
+    )
+
+
+def build_html(jobs_by_tier, new_count, health=None):
     today = date.today().strftime("%B %d, %Y")
     html = [f"<h2>Ottawa Job Digest - {today}</h2>"]
+
+    banner = build_health_html(health)
+    if banner:
+        html.append(banner)
 
     total = sum(len(v) for v in jobs_by_tier.values())
     if total == 0:
@@ -64,14 +92,19 @@ def build_html(jobs_by_tier, new_count):
     return "\n".join(html)
 
 
-def send_digest(jobs_by_tier, new_count=0):
+def send_digest(jobs_by_tier, new_count=0, health=None):
     api_key = os.environ["SENDGRID_API_KEY"]
     to_email = os.environ["EMAIL_TO"]
     from_email = os.environ.get("EMAIL_FROM", to_email)  # must be SendGrid-verified
 
     total = sum(len(v) for v in jobs_by_tier.values())
 
-    if total == 0:
+    broken = [s for s, status, _ in (health or []) if status in ("down", "crashed")]
+
+    if broken:
+        # lead with the failure - a silent 0 is worse than no email at all
+        subject = f"[SCRAPER ISSUE] Ottawa Job Digest - {len(broken)} source(s) down"
+    elif total == 0:
         subject = "Ottawa Job Digest - no matching postings open"
     elif new_count == 0:
         subject = "Ottawa Job Digest - no new postings today"
@@ -82,7 +115,8 @@ def send_digest(jobs_by_tier, new_count=0):
         "personalizations": [{"to": [{"email": to_email}]}],
         "from": {"email": from_email},
         "subject": subject,
-        "content": [{"type": "text/html", "value": build_html(jobs_by_tier, new_count)}],
+        "content": [{"type": "text/html",
+                     "value": build_html(jobs_by_tier, new_count, health)}],
     }
 
     resp = requests.post(

@@ -78,3 +78,25 @@ def filter_new(jobs):
 
     save_seen(seen)
     return new_jobs
+
+
+def collapse_duplicate_titles(jobs):
+    """Greenhouse (and some Workday tenants) post the same role once per
+    location, each with its own job ID and URL. URL-based dedup can't catch
+    these, so collapse on (source, lowercased title) and keep the first.
+    Preserves input order, so call this AFTER relevance sorting."""
+    seen_keys = set()
+    collapsed = []
+    dropped = 0
+
+    for job in jobs:
+        key = (job["source"], job["title"].strip().lower())
+        if key in seen_keys:
+            dropped += 1
+            continue
+        seen_keys.add(key)
+        collapsed.append(job)
+
+    if dropped:
+        print(f"Collapsed {dropped} duplicate title(s) across sources")
+    return collapsed
